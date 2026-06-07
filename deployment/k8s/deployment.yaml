@@ -1,0 +1,109 @@
+---
+# Backend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-backend
+  namespace: aegis-one
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aegis-backend
+  template:
+    metadata:
+      labels:
+        app: aegis-backend
+    spec:
+      containers:
+        - name: aegis-backend
+          image: aegisone.azurecr.io/aegis-backend:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aegis-secrets
+                  key: database-url
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aegis-secrets
+                  key: openai-api-key
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-backend-svc
+  namespace: aegis-one
+spec:
+  selector:
+    app: aegis-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+# Frontend Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aegis-frontend
+  namespace: aegis-one
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aegis-frontend
+  template:
+    metadata:
+      labels:
+        app: aegis-frontend
+    spec:
+      containers:
+        - name: aegis-frontend
+          image: aegisone.azurecr.io/aegis-frontend:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "http://aegis-backend-svc:8000"
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aegis-frontend-svc
+  namespace: aegis-one
+spec:
+  type: LoadBalancer
+  selector:
+    app: aegis-frontend
+  ports:
+    - port: 80
+      targetPort: 3000
